@@ -12,10 +12,12 @@ function rawMidiToABC(midiData, stemName) {
         return `X:1\nT:No Data\nM:4/4\nL:1/4\nK:C\n|]`;
     }
 
-    // Basic Pitch to ABC mapping for one octave (C4 to B4)
-    // We offset it wildly to keep it on the staff for the demo.
-    const pitchMap = {
+    // Map MIDI notes properly to ABC octave formats
+    const pitchClassUpper = {
         0: "C", 1: "^C", 2: "D", 3: "^D", 4: "E", 5: "F", 6: "^F", 7: "G", 8: "^G", 9: "A", 10: "^A", 11: "B"
+    };
+    const pitchClassLower = {
+        0: "c", 1: "^c", 2: "d", 3: "^d", 4: "e", 5: "f", 6: "^f", 7: "g", 8: "^g", 9: "a", 10: "^a", 11: "b"
     };
 
     let abcString = `X:1\n`;
@@ -23,7 +25,7 @@ function rawMidiToABC(midiData, stemName) {
     abcString += `M:4/4\n`; // Assuming 4/4 sync
     abcString += `L:1/16\n`; // Assuming 16th note grid from Go
     abcString += `Q:1/4=${Math.round(midiData.bpm || 120)}\n`;
-    abcString += `K:C\n`;
+    abcString += `K:C${stemName.toLowerCase() === 'bass' ? ' bass' : ''}\n`;
 
     let notesString = "";
     let currentTime = 0;
@@ -42,15 +44,38 @@ function rawMidiToABC(midiData, stemName) {
         }
 
         // 2. Map PITCH
-        const pitchClass = note.pitch % 12;
-        // basic octave math to keep it visually on the staff
-        let abcNote = pitchMap[pitchClass];
-        if (note.pitch > 71) abcNote = abcNote.toLowerCase(); // High octave
+        if (typeof note.pitch !== 'number' || isNaN(note.pitch) || note.pitch < 21 || note.pitch > 108) {
+            // If the AI hallucinates a non-musical frequency, draw it as a rest
+            const durationSixteenths = Math.max(1, Math.round(note.duration / sixteenth));
+            notesString += `z${durationSixteenths} `;
+        } else {
+            const pitchClass = note.pitch % 12;
+            const octave = Math.floor(note.pitch / 12) - 1; // Middle C (MIDI 60) is Octave 4
 
-        // 3. Map DURATION
-        const durationSixteenths = Math.max(1, Math.round(note.duration / sixteenth));
+            let abcNote = "";
+            if (octave >= 5) {
+                // Octave 5 and above uses lowercase c, d, e...
+                abcNote = pitchClassLower[pitchClass];
+                // c is C5. c' is C6. c'' is C7.
+                for (let i = 5; i < octave; i++) {
+                    abcNote += "'";
+                }
+            } else if (octave === 4) {
+                // Octave 4 uses uppercase C, D, E...
+                abcNote = pitchClassUpper[pitchClass];
+            } else {
+                // Octave 3 and below uses uppercase with commas
+                abcNote = pitchClassUpper[pitchClass];
+                // C, is C3. C,, is C2.
+                for (let i = octave; i < 4; i++) {
+                    abcNote += ",";
+                }
+            }
 
-        notesString += `${abcNote}${durationSixteenths} `;
+            // 3. Map DURATION
+            const durationSixteenths = Math.max(1, Math.round(note.duration / sixteenth));
+            notesString += `${abcNote}${durationSixteenths} `;
+        }
 
         // 4. Fake Bar lines every 16 sixteenths (lazy hackathon math)
         // Hard-wrap the staff every 4 bars (64 sixteenths)
@@ -113,6 +138,33 @@ export default function SheetMusicModal({ isOpen, onClose, stemName, midiData })
         URL.revokeObjectURL(url);
     };
 
+    // Download Sheet Music as an SVG vector image
+    const handleDownloadSVG = () => {
+        if (!paperRef.current) return;
+
+        // Find the injected SVG element created by abcjs
+        const svgElement = paperRef.current.querySelector('svg');
+        if (!svgElement) return;
+
+        // Serialize the DOM node into a raw XML string
+        const serializer = new XMLSerializer();
+        let svgString = serializer.serializeToString(svgElement);
+
+        // Add XML namespace if missing
+        if (!svgString.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+            svgString = svgString.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+
+        // Create Blob and trigger download
+        const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${stemName}_sheet_music.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -166,6 +218,13 @@ export default function SheetMusicModal({ isOpen, onClose, stemName, midiData })
                             </div>
 
                             <div className="flex items-center gap-4">
+                                <button
+                                    onClick={handleDownloadSVG}
+                                    className="flex items-center gap-2 font-mono text-xs text-gray-400 hover:text-white hover:bg-white/10 px-4 py-2 rounded transition-colors border border-gray-800"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    SVG VECTOR
+                                </button>
                                 <button
                                     onClick={handleDownloadMIDI}
                                     className="flex items-center gap-2 font-mono text-xs bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors"
