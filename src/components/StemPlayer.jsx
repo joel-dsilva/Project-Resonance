@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Download, AudioWaveform } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Download, AudioWaveform, FileText } from 'lucide-react';
 
-export default function StemPlayer({ audioSource = null }) {
+export default function StemPlayer({ audioSource = null, midiData = null, onOpenSheet }) {
   // Define the stem tracks with your existing color/ID scheme
   const stemConfigs = [
     { id: 'vocals', name: 'VOCALS.WAV', color: 'text-[#00f0ff]' },
@@ -55,78 +55,93 @@ export default function StemPlayer({ audioSource = null }) {
   }, [volumes]);
 
   return (
-    <div className="w-full max-w-2xl bg-[#111] border border-gray-800 p-6 rounded-lg font-mono">
+    <>
+      <div className="w-full max-w-2xl bg-[#111] border border-gray-800 p-6 rounded-lg font-mono relative z-40">
 
-      {/* Global Controls */}
-      <div className="flex items-center justify-between border-b border-gray-800 pb-6 mb-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={togglePlay}
-            disabled={!audioSource}
-            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors text-white 
-              ${!audioSource ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-700'}`}
-          >
-            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-          </button>
-          <div>
-            <h3 className="text-gray-300 tracking-widest text-sm">LATENT_STEM_MIXER</h3>
-            <p className="text-gray-500 text-xs mt-1">
-              {audioSource ? "SYSTEM READY: 4 CHANNELS SYNCED" : "AWAITING SOURCE..."}
-            </p>
+        {/* Global Controls */}
+        <div className="flex items-center justify-between border-b border-gray-800 pb-6 mb-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={togglePlay}
+              disabled={!audioSource}
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors text-white 
+                ${!audioSource ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-700'}`}
+            >
+              {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+            </button>
+            <div>
+              <h3 className="text-gray-300 tracking-widest text-sm">LATENT_STEM_MIXER</h3>
+              <p className="text-gray-500 text-xs mt-1">
+                {audioSource ? "SYSTEM READY: 4 CHANNELS SYNCED" : "AWAITING SOURCE..."}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Individual Stem Tracks */}
-      <div className="space-y-4">
-        {stemConfigs.map((stem) => (
-          <div key={stem.id} className="flex items-center justify-between bg-[#1a1a1a] p-3 rounded border border-gray-800/50">
+        {/* Individual Stem Tracks */}
+        <div className="space-y-4">
+          {stemConfigs.map((stem) => (
+            <div key={stem.id} className="flex items-center justify-between bg-[#1a1a1a] p-3 rounded border border-gray-800/50">
 
-            {/* Each audio element uses its specific stem URL */}
-            <audio
-              ref={el => audioRefs.current[stem.id] = el}
-              src={audioSource?.[stem.id] || ''}
-              crossOrigin="anonymous"
-              onError={(e) => console.error(`Error loading stem ${stem.id}:`, e.nativeEvent)}
-              loop
-            />
-
-            {/* Track Info */}
-            <div className="flex items-center gap-3 w-48">
-              <AudioWaveform className={`w-5 h-5 ${stem.color}`} />
-              <span className={`text-xs tracking-widest ${stem.color}`}>
-                {stem.name}
-              </span>
-            </div>
-
-            {/* Volume Slider */}
-            <div className="flex items-center gap-3 flex-1 px-8">
-              <button onClick={() => toggleMute(stem.id)} className="text-gray-500 hover:text-white transition-colors">
-                {volumes[stem.id] === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volumes[stem.id]}
-                onChange={(e) => handleVolumeChange(stem.id, parseFloat(e.target.value))}
-                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-white"
+              {/* Each audio element uses its specific stem URL */}
+              <audio
+                ref={el => audioRefs.current[stem.id] = el}
+                src={audioSource?.[stem.id] || ''}
+                crossOrigin="anonymous"
+                onError={(e) => console.error(`Error loading stem ${stem.id}:`, e.nativeEvent)}
+                loop
               />
+
+              {/* Track Info */}
+              <div className="flex items-center gap-3 w-48">
+                <AudioWaveform className={`w-5 h-5 ${stem.color}`} />
+                <span className={`text-xs tracking-widest ${stem.color}`}>
+                  {stem.name}
+                </span>
+              </div>
+
+              {/* Volume Slider */}
+              <div className="flex items-center gap-3 flex-1 px-8">
+                <button onClick={() => toggleMute(stem.id)} className="text-gray-500 hover:text-white transition-colors">
+                  {volumes[stem.id] === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volumes[stem.id]}
+                  onChange={(e) => handleVolumeChange(stem.id, parseFloat(e.target.value))}
+                  className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-white"
+                />
+              </div>
+
+              {/* Downloads & Sheet Music Actions */}
+              <div className="flex items-center gap-2">
+                {/* Dynamically Show Sheet Music Icon ONLY if MIDI exists for this stem */}
+                {midiData && midiData[stem.id] && (
+                  <button
+                    onClick={() => onOpenSheet && onOpenSheet(stem.id)}
+                    className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-all"
+                    title="View Sheet Music Transcription"
+                  >
+                    <FileText className="w-4 h-4" />
+                  </button>
+                )}
+
+                <a
+                  href={audioSource?.[stem.id]}
+                  download={stem.name}
+                  className="p-2 text-gray-500 hover:text-[#4ade80] hover:bg-green-400/10 rounded transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+              </div>
+
             </div>
-
-            {/* Download Button */}
-            <a
-              href={audioSource}
-              download={stem.name}
-              className="p-2 text-gray-500 hover:text-[#4ade80] hover:bg-green-400/10 rounded transition-all"
-            >
-              <Download className="w-4 h-4" />
-            </a>
-
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

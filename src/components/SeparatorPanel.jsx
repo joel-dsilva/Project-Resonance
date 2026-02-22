@@ -46,7 +46,7 @@ export default function SeparatorPanel({ onStateChange, onProgressChange, onFile
       setLogs(prev => [...prev, '[SYS] Stems successfully generated.']);
 
       if (onFileSelect) {
-        onFileSelect(data.stems);
+        onFileSelect(data.stems, data.quantized_midi);
       }
 
       setStatus('complete');

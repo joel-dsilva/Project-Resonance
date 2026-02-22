@@ -1,17 +1,24 @@
 import React, { useState } from 'react';
 import TimbreDesign from '../components/TimbreDesign';
 import SeparatorPanel from '../components/SeparatorPanel';
+import SheetMusicModal from '../components/SheetMusicModal';
 
 export default function Lab() {
   const [engineState, setEngineState] = useState('idle');
   const [progress, setProgress] = useState(0);
   const [audioURL, setAudioURL] = useState(null);
+  const [midiData, setMidiData] = useState(null); // Added state for MIDI data
+
+  // Modal State lifted to root
+  const [activeSheetStem, setActiveSheetStem] = useState(null);
 
   const isDone = engineState === 'complete';
 
-  const onStemsReady = (receivedStems) => {
+  const onStemsReady = (receivedStems, receivedMidi) => {
     setAudioURL(receivedStems);
+    setMidiData(receivedMidi);
   };
+
 
   return (
     <div className="h-screen w-full bg-[#0a0a0a] text-white flex flex-col font-display relative overflow-hidden">
@@ -45,17 +52,20 @@ export default function Lab() {
         >
 
           {/* LEFT SIDE: The Sphere/Players */}
-          <div className={`transition-all duration-1000 flex-1 ${isDone ? 'opacity-100' : 'opacity-0 scale-95 pointer-events-none absolute'}`}>
+          <div className={`transition-all duration-1000 flex-1 ${isDone ? 'opacity-100' : 'opacity-0 scale-95 pointer-events-none absolute'} ${activeSheetStem ? 'blur-sm pointer-events-none opacity-40' : ''}`}>
             <TimbreDesign
               engineState={engineState}
               engineProgress={progress}
               audioSource={audioURL}
+              midiData={midiData}
+              onOpenSheet={setActiveSheetStem}
             />
           </div>
 
           {/* RIGHT SIDE (or Center): The Engine Panel */}
           <div className={`transition-all duration-1000 ease-in-out flex-shrink-0 z-20 
-            ${isDone ? 'w-[450px] mt-10' : 'w-full max-w-xl'}`}
+            ${isDone ? 'w-[450px] mt-10' : 'w-full max-w-xl'} 
+            ${activeSheetStem ? 'blur-md opacity-20 pointer-events-none' : ''}`}
           >
             <SeparatorPanel
               onStateChange={setEngineState}
@@ -72,6 +82,14 @@ export default function Lab() {
         <div>STATUS: {engineState.toUpperCase()}</div>
         <div>MEM_ALLOC: 4.2GB</div>
       </footer>
+
+      {/* Render Modal at the absolute top level mapping down into the specific stem */}
+      <SheetMusicModal
+        isOpen={activeSheetStem !== null}
+        onClose={() => setActiveSheetStem(null)}
+        stemName={activeSheetStem}
+        midiData={activeSheetStem ? midiData[activeSheetStem] : null}
+      />
     </div>
   );
 }
