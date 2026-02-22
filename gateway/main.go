@@ -66,8 +66,14 @@ func sendToPythonWorker(filePath string, pythonAPIUrl string) ([]byte, error) {
 	go func() {
 		defer bodyWriter.Close()
 		defer multiWriter.Close()
-		part, _ := multiWriter.CreateFormFile("file", filepath.Base(filePath))
-		io.Copy(part, file)
+		part, err := multiWriter.CreateFormFile("file", filepath.Base(filePath))
+		if err != nil {
+			log.Printf("CreateFormFile error: %v", err)
+			return
+		}
+		if _, err := io.Copy(part, file); err != nil {
+			log.Printf("io.Copy error: %v", err)
+		}
 	}()
 
 	req, _ := http.NewRequest("POST", pythonAPIUrl, bodyReader)
@@ -83,6 +89,10 @@ func sendToPythonWorker(filePath string, pythonAPIUrl string) ([]byte, error) {
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("python worker returned error %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	return bodyBytes, nil
@@ -138,8 +148,8 @@ func main() {
 		}
 
 		ext := strings.ToLower(filepath.Ext(file.Filename))
-		if ext != ".wav" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only .wav allowed"})
+		if ext != ".wav" && ext != ".mp3" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Only .wav and .mp3 allowed"})
 		}
 
 		savePath := filepath.Join(UploadDir, file.Filename)
@@ -148,12 +158,28 @@ func main() {
 		// Broadcast that upload finished and processing is starting
 		broadcast(WSEvent{Type: "status", Message: "Upload complete. Sending to AI Worker..."})
 
-		pythonWorkerURL := "http://localhost:8000/separate"
+		pythonWorkerURL := "https://edgardo-interdestructive-nondeprecatorily.ngrok-free.dev/separate"
 		responseBytes, err := sendToPythonWorker(savePath, pythonWorkerURL)
 		if err != nil {
 			log.Printf("Bridge Error: %v\n", err)
 			broadcast(WSEvent{Type: "status", Message: "Error: AI Worker offline."})
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "AI Worker failed"})
+		}
+
+		// Rewrite the relative Python paths to absolute Ngrok URLs for the frontend
+		var respData map[string]interface{}
+		if err := json.Unmarshal(responseBytes, &respData); err == nil {
+			if stems, ok := respData["stems"].(map[string]interface{}); ok {
+				baseURL := "https://edgardo-interdestructive-nondeprecatorily.ngrok-free.dev"
+				for k, v := range stems {
+					if pathStr, ok := v.(string); ok {
+						stems[k] = baseURL + pathStr
+					}
+				}
+				if updatedBytes, err := json.Marshal(respData); err == nil {
+					responseBytes = updatedBytes
+				}
+			}
 		}
 
 		broadcast(WSEvent{Type: "status", Message: "AI Worker processing complete."})

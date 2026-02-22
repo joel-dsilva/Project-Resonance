@@ -4,68 +4,77 @@ import { Upload, Play, Square, Loader2, Music, Mic2, Cpu, Activity, Speaker } fr
 
 export default function SeparatorPanel({ onStateChange, onProgressChange, onFileSelect }) {
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState('idle'); 
+  const [status, setStatus] = useState('idle');
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState([]);
+  const [stemUrls, setStemUrls] = useState(null);
   const fileInputRef = useRef(null);
 
-  const handleProcess = () => {
+  const handleProcess = async () => {
     if (!file) return;
-    
+
     setStatus('processing');
     if (onStateChange) onStateChange('processing');
-    
-    setLogs(['[SYS] Initializing neural deconstruction...']);
-    setProgress(0);
-    if (onProgressChange) onProgressChange(0);
 
-    const mockSteps = [
-      { progress: 15, log: '[EXTRACT] Isolating vocal harmonics...' },
-      { progress: 35, log: '[EXTRACT] Demuxing drum transients...' },
-      { progress: 60, log: '[FILTER] Applying analog crosstalk suppression...' },
-      { progress: 85, log: '[RENDER] Rebuilding phase alignment...' },
-      { progress: 100, log: '[SYS] Stems successfully generated.' }
-    ];
+    setLogs(['[SYS] Initializing neural deconstruction...', '[SYS] Transmitting audio payload to Go Gateway...']);
+    // Removed progress numeric tracking since we don't know the progress
+    // if (onProgressChange) onProgressChange(0);
 
-    let currentStep = 0;
+    const formData = new FormData();
+    formData.append('audio', file);
 
-    const interval = setInterval(() => {
-      if (currentStep < mockSteps.length) {
-        const safeProgress = mockSteps[currentStep].progress;
-        const safeLog = mockSteps[currentStep].log;
-        
-        setProgress(safeProgress);
-        if (onProgressChange) onProgressChange(safeProgress);
-        setLogs(prev => [...prev, safeLog]);
-        
-        currentStep++;
-      } else {
-        clearInterval(interval);
-        setStatus('complete');
-        if (onStateChange) onStateChange('complete');
+    try {
+      setLogs(prev => [...prev, '[EXTRACT] Waiting for Python Demucs model...']);
+      const response = await fetch('http://localhost:3000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
       }
-    }, 800);
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server did not return valid JSON data");
+      }
+
+      setLogs(prev => [...prev, '[SYS] Parsing response JSON...']);
+      const data = await response.json();
+
+      setStemUrls(data.stems);
+      setLogs(prev => [...prev, '[SYS] Stems successfully generated.']);
+
+      if (onFileSelect) {
+        onFileSelect(data.stems);
+      }
+
+      setStatus('complete');
+      if (onStateChange) onStateChange('complete');
+    } catch (error) {
+      console.error("Upload failed", error);
+      setLogs(prev => [...prev, `[ERROR] Connection failed: ${error.message}`]);
+      setStatus('error'); // optional error state handling
+      if (onStateChange) onStateChange('error');
+    }
   };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
-      
-      // Send the file up to Lab.jsx so TimbreDesign can use it too
-      if (onFileSelect) {
-        onFileSelect(selectedFile);
-      }
-      
+
       setStatus('idle');
       setProgress(0);
       setLogs([]);
+      setStemUrls(null);
     }
   };
 
   const resetEngine = () => {
     setStatus('idle');
     setFile(null);
+    setStemUrls(null);
     if (onStateChange) onStateChange('idle');
     if (onProgressChange) onProgressChange(0);
   };
@@ -75,7 +84,7 @@ export default function SeparatorPanel({ onStateChange, onProgressChange, onFile
 
   return (
     <div className="w-full bg-[#0f1123]/90 backdrop-blur-md border border-white/10 p-6 rounded-xl shadow-2xl relative z-50">
-      
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
         <h3 className="font-display font-bold text-xl text-white tracking-widest uppercase flex items-center gap-2">
@@ -87,16 +96,16 @@ export default function SeparatorPanel({ onStateChange, onProgressChange, onFile
 
       {/* Upload Zone */}
       {status === 'idle' && (
-        <div 
+        <div
           onClick={() => fileInputRef.current?.click()}
           className="border-2 border-dashed border-white/20 hover:border-res-yellow transition-colors rounded-lg p-10 flex flex-col items-center justify-center cursor-pointer bg-black/20"
         >
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileChange} 
-            accept="audio/mp3,audio/wav" 
-            className="hidden" 
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="audio/mp3,audio/wav"
+            className="hidden"
           />
           <Upload className="w-10 h-10 text-gray-400 mb-4" />
           <p className="font-mono text-sm text-gray-300 text-center">
@@ -104,7 +113,7 @@ export default function SeparatorPanel({ onStateChange, onProgressChange, onFile
           </p>
 
           {file && (
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); handleProcess(); }}
               className="mt-6 bg-res-yellow text-black font-bold tracking-widest px-8 py-3 text-sm hover:scale-105 transition-transform"
             >
@@ -118,17 +127,17 @@ export default function SeparatorPanel({ onStateChange, onProgressChange, onFile
       {status === 'processing' && (
         <div className="space-y-4">
           <div className="flex justify-between font-mono text-xs text-[#00f0ff]">
-            <span>PROCESSING STEMS...</span>
-            <span>{progress}%</span>
+            <span>PROCESSING STEMS... THIS MAY TAKE A MOMENT</span>
+            <Loader2 className="w-4 h-4 animate-spin text-res-magenta" />
           </div>
-          <div className="h-2 w-full bg-black rounded-full overflow-hidden border border-white/10">
-            <motion.div 
-              className="h-full bg-res-magenta"
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.5, ease: "easeInOut" }}
+          <div className="h-2 w-full bg-black rounded-full overflow-hidden border border-white/10 relative">
+            <motion.div
+              className="absolute top-0 bottom-0 bg-res-magenta w-1/3"
+              animate={{ x: ["-100%", "300%"] }}
+              transition={{ duration: 1.5, ease: "linear", repeat: Infinity }}
             />
           </div>
-          
+
           <div className="bg-black/50 border border-white/5 rounded p-4 h-32 overflow-y-auto font-mono text-xs text-green-400 space-y-1">
             <AnimatePresence>
               {logs.map((log, i) => (
@@ -157,25 +166,25 @@ export default function SeparatorPanel({ onStateChange, onProgressChange, onFile
             {/* Vocals */}
             <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
               <div className="flex items-center gap-2 text-[#00f0ff] font-mono text-sm"><Mic2 className="w-4 h-4" /> VOCALS</div>
-              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
+              {stemUrls && <audio controls className="w-full h-8" src={stemUrls.vocals} />}
             </div>
-            
+
             {/* Drums */}
             <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
               <div className="flex items-center gap-2 text-res-yellow font-mono text-sm"><Activity className="w-4 h-4" /> DRUM TRANSIENTS</div>
-              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
+              {stemUrls && <audio controls className="w-full h-8" src={stemUrls.drums} />}
             </div>
 
             {/* Bass */}
             <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
               <div className="flex items-center gap-2 text-green-400 font-mono text-sm"><Speaker className="w-4 h-4" /> BASS HARMONICS</div>
-              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
+              {stemUrls && <audio controls className="w-full h-8" src={stemUrls.bass} />}
             </div>
 
             {/* Other */}
             <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
               <div className="flex items-center gap-2 text-res-magenta font-mono text-sm"><Music className="w-4 h-4" /> OTHER</div>
-              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
+              {stemUrls && <audio controls className="w-full h-8" src={stemUrls.other} />}
             </div>
           </div>
 

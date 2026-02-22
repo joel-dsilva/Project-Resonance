@@ -3,16 +3,14 @@ import TimbreDesign from '../components/TimbreDesign';
 import SeparatorPanel from '../components/SeparatorPanel';
 
 export default function Lab() {
-  const [engineState, setEngineState] = useState('idle'); 
+  const [engineState, setEngineState] = useState('idle');
   const [progress, setProgress] = useState(0);
   const [audioURL, setAudioURL] = useState(null);
 
   const isDone = engineState === 'complete';
 
-  // Handle file from SeparatorPanel
-  const onFileReady = (file) => {
-    const url = URL.createObjectURL(file);
-    setAudioURL(url);
+  const onStemsReady = (receivedStems) => {
+    setAudioURL(receivedStems);
   };
 
   return (
@@ -23,15 +21,15 @@ export default function Lab() {
       {/* Nav */}
       <nav className="w-full p-6 flex justify-between items-center z-50 flex-shrink-0">
         <div className="flex items-center gap-3">
-           <div className={`w-2 h-2 rounded-full ${isDone ? 'bg-green-500 animate-pulse' : 'bg-res-yellow'}`} />
-           <span className="font-mono text-xs tracking-[0.3em] font-bold">
-             {isDone ? 'RESONANCE_STEMS_READY' : 'RESONANCE_SYSTEM_ACTIVE'}
-           </span>
+          <div className={`w-2 h-2 rounded-full ${isDone ? 'bg-green-500 animate-pulse' : 'bg-res-yellow'}`} />
+          <span className="font-mono text-xs tracking-[0.3em] font-bold">
+            {isDone ? 'RESONANCE_STEMS_READY' : 'RESONANCE_SYSTEM_ACTIVE'}
+          </span>
         </div>
-        
+
         {/* Right side Terminate Button */}
-        <button 
-          onClick={() => window.location.href = '/'} 
+        <button
+          onClick={() => window.location.href = '/'}
           className="font-mono text-xs tracking-[0.2em] text-gray-400 border border-gray-600 px-4 py-2 hover:text-white hover:border-white hover:bg-white/5 transition-all uppercase"
         >
           [ Terminate ]
@@ -40,29 +38,29 @@ export default function Lab() {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 w-full relative p-6 overflow-y-auto overflow-x-hidden">
-        
+
         {/* The Split Container */}
         <div className={`flex transition-all duration-1000 ease-in-out gap-10 max-w-[1600px] mx-auto 
           ${isDone ? 'flex-row items-start' : 'flex-col items-center justify-center min-h-[70vh]'}`}
         >
-          
+
           {/* LEFT SIDE: The Sphere/Players */}
           <div className={`transition-all duration-1000 flex-1 ${isDone ? 'opacity-100' : 'opacity-0 scale-95 pointer-events-none absolute'}`}>
-             <TimbreDesign 
-                engineState={engineState} 
-                engineProgress={progress} 
-                audioSource={audioURL} 
-             />
+            <TimbreDesign
+              engineState={engineState}
+              engineProgress={progress}
+              audioSource={audioURL}
+            />
           </div>
 
           {/* RIGHT SIDE (or Center): The Engine Panel */}
           <div className={`transition-all duration-1000 ease-in-out flex-shrink-0 z-20 
             ${isDone ? 'w-[450px] mt-10' : 'w-full max-w-xl'}`}
           >
-            <SeparatorPanel 
-              onStateChange={setEngineState} 
+            <SeparatorPanel
+              onStateChange={setEngineState}
               onProgressChange={setProgress}
-              onFileSelect={onFileReady} 
+              onFileSelect={onStemsReady}
             />
           </div>
 
