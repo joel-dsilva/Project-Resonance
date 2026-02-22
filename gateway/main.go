@@ -143,7 +143,7 @@ func main() {
 		// Broadcast that upload finished and processing is starting
 		broadcast(WSEvent{Type: "status", Message: "Upload complete. Sending to AI Worker..."})
 
-		pythonWorkerURL := "http://localhost:8000/process"
+		pythonWorkerURL := "http://localhost:8000/separate"
 		go func() {
 			if err := sendToPythonWorker(savePath, pythonWorkerURL); err != nil {
 				log.Printf("Bridge Error: %v\n", err)
