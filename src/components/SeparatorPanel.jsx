@@ -1,9 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Play, Square, Loader2, Music, Mic2, Cpu } from 'lucide-react';
+import { Upload, Play, Square, Loader2, Music, Mic2, Cpu, Activity, Speaker } from 'lucide-react';
 
-// Notice we are accepting the new props here:
-export default function SeparatorPanel({ onStateChange, onProgressChange }) {
+export default function SeparatorPanel({ onStateChange, onProgressChange, onFileSelect }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('idle'); 
   const [progress, setProgress] = useState(0);
@@ -13,12 +12,10 @@ export default function SeparatorPanel({ onStateChange, onProgressChange }) {
   const handleProcess = () => {
     if (!file) return;
     
-    // Update local state AND notify the parent Lab component
     setStatus('processing');
     if (onStateChange) onStateChange('processing');
     
     setLogs(['[SYS] Initializing neural deconstruction...']);
-    
     setProgress(0);
     if (onProgressChange) onProgressChange(0);
 
@@ -34,18 +31,16 @@ export default function SeparatorPanel({ onStateChange, onProgressChange }) {
 
     const interval = setInterval(() => {
       if (currentStep < mockSteps.length) {
-        const currentProgress = mockSteps[currentStep].progress;
+        const safeProgress = mockSteps[currentStep].progress;
+        const safeLog = mockSteps[currentStep].log;
         
-        // Update local and parent progress
-        setProgress(currentProgress);
-        if (onProgressChange) onProgressChange(currentProgress);
+        setProgress(safeProgress);
+        if (onProgressChange) onProgressChange(safeProgress);
+        setLogs(prev => [...prev, safeLog]);
         
-        setLogs(prev => [...prev, mockSteps[currentStep].log]);
         currentStep++;
       } else {
         clearInterval(interval);
-        
-        // Final state update
         setStatus('complete');
         if (onStateChange) onStateChange('complete');
       }
@@ -54,7 +49,14 @@ export default function SeparatorPanel({ onStateChange, onProgressChange }) {
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      
+      // Send the file up to Lab.jsx so TimbreDesign can use it too
+      if (onFileSelect) {
+        onFileSelect(selectedFile);
+      }
+      
       setStatus('idle');
       setProgress(0);
       setLogs([]);
@@ -68,8 +70,11 @@ export default function SeparatorPanel({ onStateChange, onProgressChange }) {
     if (onProgressChange) onProgressChange(0);
   };
 
+  // Helper to get a preview URL for the uploaded file
+  const audioPreviewUrl = file ? URL.createObjectURL(file) : "";
+
   return (
-    <div className="w-full max-w-xl mx-auto bg-[#0f1123]/90 backdrop-blur-md border border-white/10 p-6 rounded-xl shadow-2xl relative z-50">
+    <div className="w-full bg-[#0f1123]/90 backdrop-blur-md border border-white/10 p-6 rounded-xl shadow-2xl relative z-50">
       
       {/* Header */}
       <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-4">
@@ -113,7 +118,7 @@ export default function SeparatorPanel({ onStateChange, onProgressChange }) {
       {status === 'processing' && (
         <div className="space-y-4">
           <div className="flex justify-between font-mono text-xs text-[#00f0ff]">
-            <span>PROCESSING TENSORS...</span>
+            <span>PROCESSING STEMS...</span>
             <span>{progress}%</span>
           </div>
           <div className="h-2 w-full bg-black rounded-full overflow-hidden border border-white/10">
@@ -148,14 +153,29 @@ export default function SeparatorPanel({ onStateChange, onProgressChange }) {
             SEPARATION COMPLETE.
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-4 max-h-[400px] overflow-y-auto pr-2">
+            {/* Vocals */}
             <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
               <div className="flex items-center gap-2 text-[#00f0ff] font-mono text-sm"><Mic2 className="w-4 h-4" /> VOCALS</div>
-              <audio controls className="w-full h-8"><source src="" type="audio/mpeg" /></audio>
+              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
             </div>
+            
+            {/* Drums */}
             <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
-              <div className="flex items-center gap-2 text-res-magenta font-mono text-sm"><Music className="w-4 h-4" /> INSTRUMENTAL</div>
-              <audio controls className="w-full h-8"><source src="" type="audio/mpeg" /></audio>
+              <div className="flex items-center gap-2 text-res-yellow font-mono text-sm"><Activity className="w-4 h-4" /> DRUM TRANSIENTS</div>
+              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
+            </div>
+
+            {/* Bass */}
+            <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-green-400 font-mono text-sm"><Speaker className="w-4 h-4" /> BASS HARMONICS</div>
+              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
+            </div>
+
+            {/* Other */}
+            <div className="bg-black/40 border border-white/10 p-4 rounded-lg flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-res-magenta font-mono text-sm"><Music className="w-4 h-4" /> OTHER</div>
+              <audio controls className="w-full h-8"><source src={audioPreviewUrl} type={file?.type} /></audio>
             </div>
           </div>
 
@@ -164,7 +184,6 @@ export default function SeparatorPanel({ onStateChange, onProgressChange }) {
           </button>
         </div>
       )}
-
     </div>
   );
 }

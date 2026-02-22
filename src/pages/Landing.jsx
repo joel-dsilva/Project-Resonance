@@ -125,7 +125,17 @@ export default function Landing() {
             </button>
             <nav className="flex flex-col items-center gap-8 font-display text-3xl font-bold uppercase tracking-widest">
               <a href="/" className="text-white hover:text-res-yellow transition-colors" onClick={() => setIsMenuOpen(false)}>Home</a>
-              <a href="#" className="text-white hover:text-res-magenta transition-colors">The Chaos</a>
+              
+              {/* === THE CHAOS LINK ADDED HERE === */}
+              <a 
+                href="/chaos" 
+                onClick={() => setIsMenuOpen(false)}
+                className="text-white hover:text-red-500 transition-colors uppercase tracking-[0.2em]"
+              >
+                The Chaos
+              </a>
+              {/* ================================== */}
+
               <button 
                 onClick={() => {
                   setIsMenuOpen(false);

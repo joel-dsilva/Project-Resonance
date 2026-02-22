@@ -1,5 +1,9 @@
 @import "tailwindcss";
-
+body, html {
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
 @theme {
   --color-res-dark: #0a0510;
   --color-res-yellow: #d4ff00;
