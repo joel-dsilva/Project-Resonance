@@ -53,10 +53,10 @@ func broadcast(event WSEvent) {
 }
 
 // --- BRIDGE LOGIC ---
-func sendToPythonWorker(filePath string, pythonAPIUrl string) error {
+func sendToPythonWorker(filePath string, pythonAPIUrl string) ([]byte, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %v", err)
+		return nil, fmt.Errorf("failed to open file: %v", err)
 	}
 	defer file.Close()
 
@@ -76,11 +76,16 @@ func sendToPythonWorker(filePath string, pythonAPIUrl string) error {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to reach Python worker: %v", err)
+		return nil, fmt.Errorf("failed to reach Python worker: %v", err)
 	}
 	defer resp.Body.Close()
 
-	return nil
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	return bodyBytes, nil
 }
 
 // --- MAIN SERVER ---
@@ -144,46 +149,17 @@ func main() {
 		broadcast(WSEvent{Type: "status", Message: "Upload complete. Sending to AI Worker..."})
 
 		pythonWorkerURL := "http://localhost:8000/separate"
-		go func() {
-			if err := sendToPythonWorker(savePath, pythonWorkerURL); err != nil {
-				log.Printf("Bridge Error: %v\n", err)
-				broadcast(WSEvent{Type: "status", Message: "Error: AI Worker offline."})
-			}
-		}()
-
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "success"})
-	})
-
-	// 3. NEW: The Status Webhook for Owner B (Python)
-	app.Post("/api/webhook/status", func(c *fiber.Ctx) error {
-		var payload struct {
-			Status string `json:"status"`
-		}
-		if err := c.BodyParser(&payload); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON"})
-		}
-
-		// Push the Python status directly to React!
-		broadcast(WSEvent{Type: "status", Message: payload.Status})
-		return c.SendStatus(fiber.StatusOK)
-	})
-
-	// 4. UPDATED: The MIDI Webhook for Owner B (Python)
-	app.Post("/api/webhook/midi", func(c *fiber.Ctx) error {
-		rawJSON := c.Body()
-
-		cleanJSON, err := Quantize(rawJSON, 0.6)
+		responseBytes, err := sendToPythonWorker(savePath, pythonWorkerURL)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to quantize"})
+			log.Printf("Bridge Error: %v\n", err)
+			broadcast(WSEvent{Type: "status", Message: "Error: AI Worker offline."})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "AI Worker failed"})
 		}
 
-		// The Magic Moment: Push the math-perfect JSON to React
-		broadcast(WSEvent{
-			Type: "result",
-			Data: cleanJSON, // Uses json.RawMessage to embed it perfectly
-		})
+		broadcast(WSEvent{Type: "status", Message: "AI Worker processing complete."})
 
-		return c.SendStatus(fiber.StatusOK)
+		c.Set("Content-Type", "application/json")
+		return c.Send(responseBytes)
 	})
 
 	log.Println("Go Gateway running on http://localhost:3000")
