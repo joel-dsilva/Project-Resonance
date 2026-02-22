@@ -4,19 +4,19 @@ import { Music, Square, Layers, Play } from 'lucide-react'; // Added Play
 import StemPlayer from './StemPlayer';
 
 // Added audioSource prop to receive the file URL from Lab.jsx
-export default function TimbreDesign({ engineState = 'idle', engineProgress = 0, stems = null, audioSource = null }) {
+export default function TimbreDesign({ engineState = 'idle', engineProgress = 0, stems = null, audioSource = null, midiData = null, onOpenSheet }) {
   const isComplete = engineState === 'complete';
 
-  const [activeGlow, setActiveGlow] = useState(null); 
+  const [activeGlow, setActiveGlow] = useState(null);
   const coreRef = useRef(null);
-  
+
   // --- AUDIO LOGIC ---
   const masterAudioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const togglePlayback = () => {
     if (!masterAudioRef.current || !audioSource) return;
-    
+
     if (isPlaying) {
       masterAudioRef.current.pause();
     } else {
@@ -48,15 +48,15 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
   }, []);
 
   const handleDrag = (info, color) => {
-    if (!coreRef.current) return; 
+    if (!coreRef.current) return;
     const rect = coreRef.current.getBoundingClientRect();
     const { x, y } = info.point;
     const isInside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-    
+
     if (isInside) {
       setActiveGlow(color);
     } else if (activeGlow === color) {
-      setActiveGlow(null); 
+      setActiveGlow(null);
     }
   };
 
@@ -83,12 +83,12 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
   }
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1 }}
       className="w-full flex flex-col items-center pt-8 pb-32 relative z-20">
-      
+
       {/* Hidden Master Audio Element */}
       <audio ref={masterAudioRef} src={audioSource} onEnded={() => setIsPlaying(false)} />
 
@@ -111,8 +111,8 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
       </div>
 
       <div className={`relative w-full max-w-4xl flex items-center justify-center transition-all duration-700 flex-shrink-0 ${isComplete ? 'h-[300px] mb-8' : 'h-[400px] mb-20'}`}>
-        
-        <motion.div 
+
+        <motion.div
           ref={coreRef}
           animate={{ rotate: 360 }}
           transition={{ duration: isComplete ? 30 : 60, repeat: Infinity, ease: "linear" }}
@@ -120,9 +120,9 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
         >
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTAgMGgyMHYyMEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik0wIDE5aDIwTTAgOWhVMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZDRmZjAwIiBzdHJva2Utb3BhY2l0eT0iMC40IiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')] opacity-80 mix-blend-overlay rounded-full scale-[1.8]" />
           <div className={`absolute inset-0 blur-2xl rounded-full transition-colors duration-500 ${bloomBg}`} />
-          
+
           {/* Main Playback Control inside the Sphere */}
-          <button 
+          <button
             onClick={togglePlayback}
             className="relative z-30 bg-black/40 p-6 rounded-full border border-white/20 hover:scale-110 transition-transform backdrop-blur-md group"
           >
@@ -133,14 +133,14 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
             )}
           </button>
         </motion.div>
-        
+
         <div className={`absolute -bottom-8 font-mono tracking-[0.3em] text-sm font-bold z-20 border-b pb-1 transition-colors ${isComplete && !activeGlow ? 'text-green-400 border-green-400' : (activeGlow ? `text-white border-white` : 'text-res-magenta border-res-magenta')}`}>
           {isComplete ? 'ISOLATION_MATRIX_ACTIVE' : 'LATENT_CORE_01'}
         </div>
 
         {/* Floating Node 1: Vocals (Cyan) */}
-        <motion.div 
-          drag 
+        <motion.div
+          drag
           dragConstraints={{ left: -300, right: 300, top: -200, bottom: 200 }}
           onDrag={(e, info) => handleDrag(info, 'cyan')}
           animate={{ y: [0, -15, 0] }}
@@ -154,8 +154,8 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
         </motion.div>
 
         {/* Floating Node 2: Drums (Gray) */}
-        <motion.div 
-          drag 
+        <motion.div
+          drag
           dragConstraints={{ left: -300, right: 300, top: -200, bottom: 200 }}
           onDrag={(e, info) => handleDrag(info, 'gray')}
           animate={{ y: [0, 20, 0] }}
@@ -169,8 +169,8 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
         </motion.div>
 
         {/* Floating Node 3: Bass/Instruments (Magenta) */}
-        <motion.div 
-          drag 
+        <motion.div
+          drag
           dragConstraints={{ left: -300, right: 300, top: -200, bottom: 200 }}
           onDrag={(e, info) => handleDrag(info, 'magenta')}
           animate={{ y: [0, -10, 0] }}
@@ -233,14 +233,14 @@ export default function TimbreDesign({ engineState = 'idle', engineProgress = 0,
           </div>
         </div>
       ) : (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.8 }}
           className="w-full max-w-5xl flex justify-center mt-4 px-8 flex-shrink-0"
         >
           {/* Passing audioSource into the StemPlayer (which contains your sliders) */}
-          <StemPlayer audioSource={audioSource} />
+          <StemPlayer audioSource={audioSource} midiData={midiData} onOpenSheet={onOpenSheet} />
         </motion.div>
       )}
     </motion.div>

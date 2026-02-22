@@ -166,19 +166,66 @@ func main() {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "AI Worker failed"})
 		}
 
-		// Rewrite the relative Python paths to absolute Ngrok URLs for the frontend
+		// Intercept the JSON response from Python
 		var respData map[string]interface{}
 		if err := json.Unmarshal(responseBytes, &respData); err == nil {
+			baseURL := "https://edgardo-interdestructive-nondeprecatorily.ngrok-free.dev"
+
+			// 1. Rewrite the audio stem URLs to be absolute Ngrok paths
 			if stems, ok := respData["stems"].(map[string]interface{}); ok {
-				baseURL := "https://edgardo-interdestructive-nondeprecatorily.ngrok-free.dev"
 				for k, v := range stems {
-					if pathStr, ok := v.(string); ok {
+					if pathStr, ok := v.(string); ok && pathStr != "" {
 						stems[k] = baseURL + pathStr
 					}
 				}
-				if updatedBytes, err := json.Marshal(respData); err == nil {
-					responseBytes = updatedBytes
+			}
+
+			// 2. Intercept the new midi_json pointers from Python
+			if midiJSON, ok := respData["midi_json"].(map[string]interface{}); ok {
+				quantizedMidi := make(map[string]interface{})
+
+				for stemName, pathVal := range midiJSON {
+					if pathStr, ok := pathVal.(string); ok && pathStr != "" {
+						// Construct the full URL to the raw JSON file
+						midiURL := baseURL + pathStr
+						log.Printf("Intercepting raw MIDI from: %s", midiURL)
+
+						// Actively orchestrate the download
+						resp, err := http.Get(midiURL)
+						if err == nil && resp.StatusCode == 200 {
+							rawMidiBytes, readErr := io.ReadAll(resp.Body)
+							resp.Body.Close()
+
+							if readErr == nil {
+								// 3. Feed the math engine! Pass the raw bytes to quantizer.go
+								// We use 0.5 as a confidence threshold to drop bad transcriptions
+								quantizedBytes, qErr := Quantize(rawMidiBytes, 0.5)
+								if qErr == nil {
+									// Unmarshal the cleaned data so it seamlessly embeds into the parent struct
+									var cleanData map[string]interface{}
+									if err := json.Unmarshal(quantizedBytes, &cleanData); err == nil {
+										quantizedMidi[stemName] = cleanData
+										log.Printf("Successfully quantized %s MIDI tracks", stemName)
+									}
+								} else {
+									log.Printf("Quantizer logic failed for %s: %v", stemName, qErr)
+								}
+							}
+						} else {
+							log.Printf("Failed to download raw MIDI from Python: %v", err)
+						}
+					}
 				}
+
+				// Map the perfectly cleaned and quantized data directly back onto the root response!
+				if len(quantizedMidi) > 0 {
+					respData["quantized_midi"] = quantizedMidi
+				}
+			}
+
+			// Repackage the final payload to send to Owner A (React)
+			if updatedBytes, err := json.Marshal(respData); err == nil {
+				responseBytes = updatedBytes
 			}
 		}
 
